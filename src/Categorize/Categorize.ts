@@ -5,6 +5,7 @@ import { BaseCall } from '../Common/BaseCall';
 import { OrderBy } from '../Common/OrderBy';
 import { SearchType } from '../Common/SearchType';
 import { Query } from '../Common/Query';
+import { Filter } from '../Common/Filter';
 import { QueryConverter, QueryCategorizeConverterV2, QueryCategorizeConverterV3 } from '../QueryConverter';
 import { Categories, Category, Group } from '../Data';
 import { AuthToken } from '../Authentication/AuthToken';
@@ -100,7 +101,7 @@ export class Categorize extends BaseCall<Categories> {
         }
     }
      
-    public filtersChanged(oldValue: string[], query: Query) { 
+    public filtersChanged(oldValue: Filter[], query: Query) { 
         if (this.settings.cbSuccess && this.settings.triggers.filterChanged) {
             this.update(query);
         }
