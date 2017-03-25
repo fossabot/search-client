@@ -167,7 +167,7 @@ export class SearchClient implements AuthToken {
      * This is a handy helper to help the user navigating the category-tree. It is typically used when a given node 
      * has a lot of categories. This often happens with i.e. the Author category node. With this feature you can 
      * present the user with a filter-edit-box in the Author node, and allow them to start typing values which will 
-     * then filter the category-nodes to only match the text entered.
+     * then filter the category-nodes' displayName to only match the text entered.
      * 
      * Nodes that doesn't have any filters are returned, even if filters for other nodes are defined.
      * 
@@ -329,18 +329,14 @@ export class SearchClient implements AuthToken {
      * 
      * Will run trigger-checks and potentially update services.
      */
-    public filterAdd(filter: string): boolean {
-        if (this._query.filters.indexOf(filter) === -1) {
-            let oldValue = this._query.filters.slice(0);
-            this._query.filters.push(filter);
-            this._query.filters.sort();
+    public filterAdd(filter: string[] | Category | Filter): boolean {
+        let item = this.filterId(filter);
+        let foundIndex = this.filterIndex(item);
 
-            this.autocomplete.filtersChanged(oldValue, this._query);
-            this.categorize.filtersChanged(oldValue, this._query);
-            this.find.filtersChanged(oldValue, this._query);
-            
+        if (foundIndex === -1) {
+            this.doFilterAdd(item);
             return true;
-        } 
+        }
         // Filter already set
         return false;
     }
@@ -350,20 +346,15 @@ export class SearchClient implements AuthToken {
      * 
      * Will run trigger-checks and potentially update services.
      */
-    public filterRemove(filter: string | string[]): boolean {
-        const pos = this._query.filters.indexOf(filter);
-        if (pos > -1) {
-            let oldValue = this._query.filters.slice(0);
-            this._query.filters.splice(pos, 1); 
-            // Note: No need to sort the filter-list afterwards, as removing an item cannot change the order anyway.
+    public filterRemove(filter: string[] | Category | Filter): boolean {
+        let item = this.filterId(filter);
+        let foundIndex = this.filterIndex(item);
 
-            this.autocomplete.filtersChanged(oldValue, this._query);
-            this.categorize.filtersChanged(oldValue, this._query);
-            this.find.filtersChanged(oldValue, this._query);
-
+        if (foundIndex > -1) {
+            this.doFilterRemove(foundIndex);
             return true;
-        } 
-        // Filter already not set
+        }
+        // Filter already set
         return false;
     }
 
@@ -376,26 +367,14 @@ export class SearchClient implements AuthToken {
      * @return true if the filter was added, false if it was removed.
      */
     public filterToggle(filter: string[] | Category | Filter): boolean {
-        let id: string[];
-        if (Array.isArray(filter)) {
-            id = filter;
-        } else if (filter instanceof Filter) {
-            id = filter.ref.categoryName;
-        } else {
-            id = filter.categoryName;
-        }
-
-        const filterString = id.join("|");
-
-        let foundIndex = this._query.filters.findIndex((f) => {
-            return f.ref.categoryName.join("|") === filterString;
-        });
+        let item = this.filterId(filter);
+        let foundIndex = this.filterIndex(item);
         
         if (foundIndex > -1) {
             this.doFilterRemove(foundIndex);
             return false;
         } else {
-            this.doFilterAdd(id);
+            this.doFilterAdd(item);
             return true;
         }
     }
@@ -671,20 +650,17 @@ export class SearchClient implements AuthToken {
     }
 
     private doFilterAdd(filter: string[]) {
-        // TODO: Find item in categorize.categories, and build displayName for the Filter (displayName for each categoryNode in the hierarchy)
-
-        let filterId = filter.ref.categoryName.join("|");
-
-        let i = this._query.filters.length;
-
-        while (i--) {
-            if (this._query.filters[i].ref.categoryName.join("|") === filterId) {
-                this._query.filters.splice(i, 1);
-                return true;
-            }
-        }
-        return false;
+        // Find item in categorize.categories, and build displayName for the Filter (displayName for each categoryNode in the hierarchy)
+        let newFilter = this.categorize.createCategoryFilter(filter);
+        let oldValue = this._query.filters.slice(0);
+        this._query.filters.push(newFilter);
+        this._query.filters.sort();
+        
+        this.autocomplete.filtersChanged(oldValue, this._query);
+        this.categorize.filtersChanged(oldValue, this._query);
+        this.find.filtersChanged(oldValue, this._query);
     }
+
     private doFilterRemove(i: number) {
         let oldValue = this._query.filters.slice(0);
         this._query.filters.splice(i, 1); 
@@ -696,4 +672,22 @@ export class SearchClient implements AuthToken {
 
         return true;
     }
+
+    private filterId(filter: string[] | Category | Filter): string[] {
+        let id: string[];
+        if (Array.isArray(filter)) {
+            id = filter;
+        } else if (filter instanceof Filter) {
+            id = filter.category.categoryName;
+        } else {
+            id = filter.categoryName;
+        }
+        return id;
+    }
+
+    private filterIndex(filter: string[]): number {
+        const filterString = filter.join("|");
+        return this._query.filters.findIndex((f) => f.category.categoryName.join("|") === filterString);
+    }
+
 }
